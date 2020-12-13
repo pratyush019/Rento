@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "745982448416",
+    "firebase_url": "https://cycle-app-f2307.firebaseio.com",
+    "project_id": "cycle-app-f2307",
+    "storage_bucket": "cycle-app-f2307.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:745982448416:android:b57baeedbc14e2b15f7d45",
+        "android_client_info": {
+          "package_name": "com.tlabs.rento"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "745982448416-i2ni3mqgu8p4eo57fnf4gif8fjvp6sgh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhHkdGkm87iMR275biKM17QbSAYnzxcxA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "745982448416-i2ni3mqgu8p4eo57fnf4gif8fjvp6sgh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="STORAGE_PERMISSION_CODE">10</integer>
+    <integer name="CAMERA_PERMISSION_CODE">20</integer>
+    <integer name="LOCATION_PERMISSION_CODE">30</integer>
+    <integer name="PICK_IMAGE_REQUEST_CODE">40</integer>
+    <integer name="CAPTURE_IMAGE_REQUEST_CODE">50</integer>
+    <integer name="TOGGLE_GPS_REQUEST_CODE">60</integer>
+
+
+
+</resources>
