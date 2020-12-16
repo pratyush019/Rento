@@ -43,4 +43,7 @@
     <string name="fetching">Fetching data…</string>
     <string name="sign_up">SIGNUP</string>
     <string name="terms">By clicking PROCEED, I agree to <font color='#FF3700B3'>Terms and Condition</font></string>
+    <string name="request_info">Your request has been sent to owner. Call button will be enabled after owner approves your request</string>
+    <string name="approved_info">You\'ve approved this request. To rent again, check
+        <font color='#ed0e0e'>Back to Rent</font> and proceed</string>
 </resources>

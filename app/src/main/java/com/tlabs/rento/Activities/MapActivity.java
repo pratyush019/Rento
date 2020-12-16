@@ -1,5 +1,6 @@
 package com.tlabs.rento.Activities;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -41,7 +42,11 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         mMap = googleMap;
 
 
-        if (Methods.hasGrantedLocationPermission(this)) {
+        if (Methods.hasGrantedPermission(this,
+                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},
+                "We need to access this device location. Click continue to grant permission",
+                "We need to access this device location.You can give location permission from settings",
+                30,"location")) {
             getCoordinates();
             mMap.setMyLocationEnabled(true);
         }
@@ -55,8 +60,14 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
-        if (Methods.hasGrantedLocationPermission(this))
+
+        if (Methods.hasGrantedPermission(this,
+                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},
+                "We need to access this device location. Click continue to grant permission",
+                "We need to access this device location.You can give location permission from settings",
+                30,"location"))
             initMap();
+
         latitude=getIntent().getDoubleExtra("lat",0.0);
         longitude=getIntent().getDoubleExtra("lon",0.0);
         fromHomeActivity=getIntent().getBooleanExtra("fromHomeActivity",false);
@@ -67,7 +78,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private void getCoordinates() {
         GPSHelper gpsHelper = new GPSHelper(this);
         if (gpsHelper.canGetLocation()) {
-            gpsHelper.getLocation();
+         // gpsHelper.getLocation();
             double lat=gpsHelper.getLatitude();
             if (lat!=0){
                 moveCamera(new LatLng(gpsHelper.getLatitude(),gpsHelper.getLongitude()));
@@ -133,7 +144,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1000 && resultCode==RESULT_OK) {
+        if (requestCode == 60 && resultCode==RESULT_OK) {
             Log.d("toggle call","switched");
             getCoordinates();
         }

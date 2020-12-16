@@ -2,6 +2,7 @@ package com.tlabs.rento.Activities;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -29,12 +30,13 @@ import com.tlabs.rento.Helpers.CoordinateList;
 import com.tlabs.rento.Helpers.CycleList;
 import com.tlabs.rento.Helpers.Drawer;
 import com.tlabs.rento.Helpers.Methods;
+import com.tlabs.rento.Helpers.UserDetails;
 import com.tlabs.rento.R;
 
 import java.util.ArrayList;
 import java.util.Objects;
 
-public class HomeActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
+public class HomeActivity extends AppCompatActivity {
     ArrayList<CycleList> cyclelist;
     Toolbar toolbar;
     String selectedZone = "Tilak";
@@ -55,12 +57,30 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
 
 
 
+
         Spinner spinner = findViewById(R.id.showZone);
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
                 R.array.zones, android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
-        spinner.setOnItemSelectedListener(this);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long l) {
+                if (parent.getId()==R.id.showZone) {
+                    selectedZone = Methods.selectedZone(position);
+                    showAvailableCycle(selectedZone);
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                if (parent.getId()==R.id.showZone) {
+                    selectedZone="Tilak";
+                    showAvailableCycle(selectedZone);
+                }
+
+            }
+        });
 
         showAvailableCycle(selectedZone);
     }
@@ -77,32 +97,66 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
                 gpsList=new ArrayList<>();
                 // Result will be holded Here
                 for (DataSnapshot dsp : snapshot.getChildren()) {
-                    String brand,available,cycleURL,note,phone,lat,lon,renterUid;
+                    final String[] brand = new String[1];
+                    final String[] available = new String[1];
+                    final String[] cycleURL = new String[1];
+                    final String[] note = new String[1];
+                    final String[] phone = new String[1];
+                    final String[] lat = new String[1];
+                    final String[] lon = new String[1];
+                    String renterUid;
                     renterUid=dsp.getKey();
-                    brand=Objects.requireNonNull(dsp.child("brand").getValue()).toString();
-                    available=Objects.requireNonNull(dsp.child("available").getValue()).toString();
-                    cycleURL=Objects.requireNonNull(dsp.child("cycleURL").getValue()).toString();
-                    phone= Objects.requireNonNull(dsp.child("phone").getValue()).toString();
-                    if (dsp.hasChild("note"))
-                        note=Objects.requireNonNull(dsp.child("note").getValue()).toString();
-                    else note=null;
-                    if (dsp.hasChild("lat") && dsp.hasChild("lon")){
-                        lat=Objects.requireNonNull(dsp.child("lat").getValue()).toString();
-                        lon=Objects.requireNonNull(dsp.child("lon").getValue()).toString();
-                    }
-                    else{
-                        lat="0.0";
-                        lon="0.0";
-                    }
 
-                    cyclelist.add(new CycleList(brand, "Available between "+available, cycleURL, note, phone, lat, lon,renterUid));
-                    gpsList.add(new CoordinateList(Double.parseDouble(lat),
-                            Double.parseDouble(lon),brand,"Available between "+available));
+                    FirebaseDatabase.getInstance().getReference("rented").child(renterUid).addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            String to=snapshot.child("To").getValue().toString();
+
+                            if (to.equals("none") || to.equals(UserDetails.getUid())){
+                                brand[0] =Objects.requireNonNull(dsp.child("brand").getValue()).toString();
+                                available[0] =Objects.requireNonNull(dsp.child("available").getValue()).toString();
+                                cycleURL[0] =Objects.requireNonNull(dsp.child("cycleURL").getValue()).toString();
+                                phone[0] = Objects.requireNonNull(dsp.child("phone").getValue()).toString();
+                                if (dsp.hasChild("note"))
+                                    note[0] =Objects.requireNonNull(dsp.child("note").getValue()).toString();
+                                else note[0] =null;
+                                if (dsp.hasChild("lat") && dsp.hasChild("lon")){
+                                    lat[0] =Objects.requireNonNull(dsp.child("lat").getValue()).toString();
+                                    lon[0] =Objects.requireNonNull(dsp.child("lon").getValue()).toString();
+                                }
+                                else{
+                                    lat[0] ="0.0";
+                                    lon[0] ="0.0";
+                                }
+                                cyclelist.add(new CycleList(brand[0], "Available between "+ available[0], cycleURL[0], note[0], phone[0], lat[0], lon[0],renterUid));
+                                gpsList.add(new CoordinateList(Double.parseDouble(lat[0]),
+                                        Double.parseDouble(lon[0]), brand[0],"Available between "+ available[0]));
+
+                                CycleListAdapter cycleListAdapter=new CycleListAdapter(HomeActivity.this,cyclelist);
+                                recyclerView.setAdapter(cycleListAdapter);
+
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+
+                        }
+                    });
+
+
+
+
+
+
+
+
+
+
+
                 }
                 progressDialog.dismiss();
-                Toast.makeText(HomeActivity.this, cyclelist.size() + " cycles available", Toast.LENGTH_SHORT).show();
-                CycleListAdapter cycleListAdapter=new CycleListAdapter(HomeActivity.this,cyclelist);
-                recyclerView.setAdapter(cycleListAdapter);
+
 
             }
 
@@ -132,22 +186,5 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
         return true;
     }
 
-    @Override
-    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-        // An item was selected. You can retrieve the selected item using
-        // parent.getItemAtPosition(pos)
-        if (parent.getId()==R.id.showZone) {
-            selectedZone = Methods.selectedZone(position);
-            showAvailableCycle(selectedZone);
-        }
-    }
-
-    public void onNothingSelected(AdapterView<?> parent) {
-        // Another interface callback
-        if (parent.getId()==R.id.showZone) {
-        selectedZone="Tilak";
-        showAvailableCycle(selectedZone);
-    }
-    }
 }
 

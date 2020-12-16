@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -20,6 +21,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
@@ -44,12 +46,14 @@ import com.tlabs.rento.Helpers.Methods;
 import com.tlabs.rento.Helpers.UserDetails;
 import com.tlabs.rento.R;
 
+import java.io.File;
 import java.util.Objects;
 
 public class Profile extends AppCompatActivity {
     private ImageView profileImage;
-    TextView name,email,password;
+    TextView name,email,password,phone;
     ProgressBar progressBar;
+    Uri contentUri;
    // READ_EXTERNAL_STORAGE_CODE 10
    // CAMERA_PERMISSION_CODE 20
    // ACCESS_LOCATION_CODE 30
@@ -72,11 +76,12 @@ public class Profile extends AppCompatActivity {
         ImageView camera = findViewById(R.id.profileImageChange);
         name=findViewById(R.id.username);
         email=findViewById(R.id.usermail);
+        phone=findViewById(R.id.phone);
         password=findViewById(R.id.changepwd);
         progressBar=findViewById(R.id.profileProgress);
         progressBar.setVisibility(View.GONE);
 
-        String[] details=new String[3];
+        String[] details=new String[4];
 
         Query reference = FirebaseDatabase.getInstance().getReference("users").child(UserDetails.getUid());
         reference.addValueEventListener(new ValueEventListener() {
@@ -86,11 +91,17 @@ public class Profile extends AppCompatActivity {
                 details[1] = Objects.requireNonNull(snapshot.child("mail").getValue()).toString();
                 if (snapshot.hasChild("image")) {
                     details[2] = Objects.requireNonNull(snapshot.child("image").getValue()).toString();
+                    loadImage(details[2]);
+
                 }
+                if (snapshot.hasChild("phone")){
+                    details[3]= Objects.requireNonNull(snapshot.child("phone").getValue()).toString();
+                    phone.setText(details[3]);
+                }
+                else phone.setText("Phone no. not added");
 
                 name.setText(details[0]);
                 email.setText(details[1]);
-                loadImage(details[1]);
             }
 
             @Override
@@ -108,20 +119,49 @@ public class Profile extends AppCompatActivity {
 
         password.setOnClickListener(v -> changePasswordDialog());
 
+        phone.setOnClickListener(view -> updatePhoneDialog());
+
         camera.setOnClickListener(view -> ActivityHelpers.createChooser(Profile.this));
 
 
 
     }
+
+    private void updatePhoneDialog() {
+        View view = LayoutInflater.from(this).inflate(R.layout.editname, null);
+        EditText editText = view.findViewById(R.id.editTextDialogUserInput);
+        TextView message=view.findViewById(R.id.message);
+        message.setText("Please Enter your 10 digit phone no.");
+        editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+        AlertDialog alertDialog = new AlertDialog.Builder(Profile.this)
+                .setTitle("Update Phone")
+                .setView(view)
+                .setPositiveButton("OK", (dialog, which) -> {
+                    String string=editText.getText().toString();
+                    if (string.length()==10) {
+                        UserDetails.setPhone(string);
+                        Toast.makeText(Profile.this, "Updated", Toast.LENGTH_SHORT).show();
+                    }
+                    else {
+                        Toast.makeText(Profile.this, "Invalid Phone", Toast.LENGTH_SHORT).show();
+
+                    }
+                })
+                .setNegativeButton("Cancel", (dialog, which) -> dialog.cancel())
+                .create();
+        alertDialog.show();
+    }
+
     //triggered when user tries to change
     // his name
     private void setUsername() {
 
         View view = LayoutInflater.from(this).inflate(R.layout.editname, null);
         EditText editText = view.findViewById(R.id.editTextDialogUserInput);
+        TextView message=view.findViewById(R.id.message);
+        message.setText("Please Enter your new Username");
         AlertDialog alertDialog = new AlertDialog.Builder(Profile.this)
                 .setTitle("Change Username")
-                .setMessage("Please Enter your new Username")
                 .setView(view)
                 .setPositiveButton("OK", (dialog, which) -> {
                    UserDetails.setName(editText.getText().toString());
@@ -190,15 +230,21 @@ public class Profile extends AppCompatActivity {
         switch (requestCode){
             case 40:{
                 if (resultCode==RESULT_OK && data!=null){
-                  Uri uri=data.getData();
-                  Log.d("gal",uri.toString());
+                    Uri uri=data.getData();
+                    File compressedFile=Methods.getCompressedFile(this,uri);
+                    contentUri=Methods.getImageContentUri(this,compressedFile.getAbsolutePath());
+                    uploadToFirebase(contentUri);
 
                 }
             }
             break;
             case 50:{
                 if (resultCode==RESULT_OK){
-                    // cam data is null
+                    Uri uri=Methods.getCameraUri(this);
+                    File compressedFile=Methods.getCompressedFile(this,uri);
+                    contentUri=Methods.getImageContentUri(this,compressedFile.getAbsolutePath());
+                    new File(uri.getPath()).delete();
+                    uploadToFirebase(contentUri);
                 }
 
 
@@ -228,25 +274,26 @@ public class Profile extends AppCompatActivity {
 
     private void loadImage(String url) {
         Uri imageUri=Uri.parse(url);
-        if (imageUri!=null && !Methods.isActivityDestroyed(this))
+        if (imageUri!=null && !Methods.isActivityDestroyed(this)) {
             progressBar.setVisibility(View.VISIBLE);
-        Glide.with(this)
-                .load(imageUri)
-                .listener(new RequestListener<Drawable>() {
-                    @Override
-                    public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
-                        progressBar.setVisibility(View.GONE);
-                        return false;
-                    }
+            Glide.with(this)
+                    .load(imageUri)
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+                            progressBar.setVisibility(View.GONE);
+                            return false;
+                        }
 
-                    @Override
-                    public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
-                        progressBar.setVisibility(View.GONE);
-                        return false;
-                    }
-                }).placeholder(R.drawable.ic_baseline_account_circle_24)
-                .transform(new CircleCrop())
-                .into(profileImage);
+                        @Override
+                        public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+                            progressBar.setVisibility(View.GONE);
+                            return false;
+                        }
+                    }).placeholder(R.drawable.ic_baseline_account_circle_24)
+                    .transform(new CircleCrop())
+                    .into(profileImage);
+        }
 
     }
 
@@ -256,14 +303,17 @@ public class Profile extends AppCompatActivity {
         switch (requestCode){
             case 10:{
                 if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED)
                         ActivityHelpers.launchGalleryIntent(this);
             }
             break;
             case 20:{
 
                 if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[2] == PackageManager.PERMISSION_GRANTED)
                     ActivityHelpers.launchCameraIntent(this,this);
             }
             break;

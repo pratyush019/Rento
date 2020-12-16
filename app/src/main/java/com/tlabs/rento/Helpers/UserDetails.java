@@ -67,23 +67,7 @@ public class UserDetails {
         return deviceToken[0];
     }
 
-    public static String getPhone() {
-        final String[] phone = new String[1];
-        databaseReference.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.hasChild("phone"))
-                    phone[0] =snapshot.child("phone").getValue().toString();
-                else phone[0] =null;
-            }
 
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-
-            }
-        });
-        return phone[0];
-    }
     public static FirebaseUser getCurrentUser(){
         return firebaseUser;
     }
@@ -116,6 +100,7 @@ public class UserDetails {
 
     public static void setPhone(String phone) {
         databaseReference.child("phone").setValue(phone);
+
     }
     public static void setMailVerified(String status){
         databaseReference.child("email verified").setValue(status);

@@ -1,12 +1,11 @@
 package com.tlabs.rento.Activities;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -26,8 +25,11 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.tlabs.rento.Helpers.ActivityHelpers;
 import com.tlabs.rento.Helpers.Drawer;
@@ -37,25 +39,25 @@ import com.tlabs.rento.Helpers.UserDetails;
 import com.tlabs.rento.R;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Objects;
 
-import id.zelory.compressor.Compressor;
+import static com.tlabs.rento.Helpers.Methods.checkURIResource;
 
-public class Rent extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
+public class Rent extends AppCompatActivity {
 
 
     private Uri contentUri;
-    private String zone = "Tilak",Latitude,Longitude;
-    private DatabaseReference mDatabaseReference;
-
+    private String zone = "Tilak",Latitude,Longitude,Phone;
+    DatabaseReference databaseReference;
     private ImageView cycleImage;
-    private String Uid;
+    private final String Uid=UserDetails.getUid();
     private int i=0;
     private Spinner zoneSpinner;
-    EditText brand,From,To,phone,note;
+    EditText brand,From,To,note;
     CheckBox noteCheckbox,gpsCheckbox;
     private boolean isActivityResult=false;
+
+
 
 
 
@@ -69,7 +71,6 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
         setSupportActionBar(toolbar);
         Drawer.drawerGenerator(toolbar, this, this, savedInstanceState);
 
-        Uid = UserDetails.getUid();
 
         cycleImage = findViewById(R.id.cycle_image);
 
@@ -77,7 +78,6 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
         brand = findViewById(R.id.Edit_Brand);
         From = findViewById(R.id.Edit_availible_time_From);
         To = findViewById(R.id.Edit_availible_time_To);
-        phone = findViewById(R.id.Edit_Phone_Number);
         note = findViewById(R.id.note);
 
         zoneSpinner = findViewById(R.id.spinner);
@@ -89,6 +89,7 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
         TextView terms = findViewById(R.id.terms);
         Button proceed = findViewById(R.id.proceed);
 
+        databaseReference = FirebaseDatabase.getInstance().getReference();
 
         cycleImage.setOnClickListener(v -> ActivityHelpers.createChooser(Rent.this));
 
@@ -109,12 +110,28 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
                 R.array.zones, android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         zoneSpinner.setAdapter(adapter);
+        zoneSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int position, long l) {
+                zone=Methods.selectedZone(position);
+                i=position;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+                zone="Tilak";
+                i=0;
+
+            }
+        });
 
 
         note.setVisibility(View.INVISIBLE);
         noteCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (buttonView.isChecked())
+            if (buttonView.isChecked()) {
                 note.setVisibility(View.VISIBLE);
+                note.requestFocus();
+            }
             else {
                 note.setText("");
                 note.setVisibility(View.INVISIBLE);
@@ -122,7 +139,11 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
         });
 
         gpsCheckbox.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (buttonView.isChecked() && Methods.hasGrantedLocationPermission(Rent.this)){
+            if (buttonView.isChecked() && Methods.hasGrantedPermission(Rent.this,
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},
+                    "We need to access this device location. Click continue to grant permission",
+                    "We need to access this device location.You can give location permission from settings",
+                    30,"location")){
                 getCoordinates();
             }
 
@@ -150,7 +171,6 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
 
         proceed.setOnClickListener(v -> {
             String Brand = brand.getText().toString();
-            String Phone = phone.getText().toString();
             String Note = note.getText().toString();
             String from = From.getText().toString();
             String to = To.getText().toString();
@@ -164,19 +184,36 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
             } else if (to.isEmpty()) {
                 To.setError("Provide availability time");
                 To.requestFocus();
-            } else if (Phone.length() != 10) {
-                phone.setError("Provide valid phone no.");
-                phone.requestFocus();
-            } else if (noteCheckbox.isChecked() && Note.isEmpty()) {
+            } else  if (noteCheckbox.isChecked() && Note.isEmpty()) {
                 note.setError("Provide availability time");
                 note.requestFocus();
             } else if (contentUri != null && !contentUri.equals(Uri.EMPTY)) {
 
+                databaseReference.child("users").child(Uid).addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (snapshot.hasChild("phone")){
+                            Phone=snapshot.child("phone").getValue().toString();
+                            uploadToFirebase(contentUri, Brand, Note, from, to, noteCheckbox);
+                        }
+                        else {
+                            AlertDialog.Builder builder=Methods.builder(Rent.this,"Error","You've not added phone no." +
+                                    " in your profile. Phone no. helps to establish contact. Please update your profile and come back.");
+                            builder.setPositiveButton("Ok", (dialogInterface, i) -> dialogInterface.dismiss()).show();
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+
+                    }
+                });
+
                 Methods.saveRentInfo(Rent.this, i, Brand,
                         From.getText().toString(),To.getText().toString()
-                        , Phone, noteCheckbox.isChecked(), Note, contentUri.toString());
+                        , noteCheckbox.isChecked(), Note, contentUri.toString());
 
-                uploadToFirebase(contentUri, Brand, Phone, Note, from, to, noteCheckbox);
+
 
             } else {
                 Toast.makeText(Rent.this, "No photo selected", Toast.LENGTH_SHORT).show();
@@ -190,79 +227,80 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
     @Override
     protected void onStart() {
         super.onStart();
-        if (!isActivityResult) {
-          /*  if (isAvailable) {
-               // startActivity(new Intent(this, StatusActivity.class));
-                finish();
-            } else */
-                Methods.fillRentForm(this, zoneSpinner, brand, From, To, phone, noteCheckbox, note, cycleImage);
-        }
-    }
+                    if (!isActivityResult) {
+
+                        AlertDialog progressDialog = Methods.progressDialog(Rent.this, "Checking Status...");
+                        progressDialog.setCancelable(false);
+                        progressDialog.setCanceledOnTouchOutside(false);
+                        progressDialog.show();
 
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        switch (requestCode) {
-            case 40:{
-                if (resultCode==RESULT_OK && data!=null){
-                    Uri uri=data.getData();
+                        databaseReference.child("rented").addListenerForSingleValueEvent(new ValueEventListener() {
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                if (snapshot.hasChild(Uid)) {
+                                    progressDialog.dismiss();
 
-                    isActivityResult=true;
-                    Log.d("gal",uri.toString());
-                    try {
-                        new Compressor(this)
-                                //.setMaxWidth(640)
-                               // .setMaxHeight(480)
-                               // .setQuality(75)
-                                .setCompressFormat(Bitmap.CompressFormat.JPEG)
-                                .setDestinationDirectoryPath(new File(this.getExternalCacheDir(),"images").getAbsolutePath())
-                                .compressToFile(new File(getPath(uri)));
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                                    String to=snapshot.child(Uid).child("To").getValue().toString();
+                                    if (to.equals("none")) {
+                                        startActivity(new Intent(Rent.this, StatusActivity.class));
+                                    }
+                                    else {
+                                        Intent intent=new Intent(Rent.this,Approval.class);
+                                        intent.putExtra("requesterUid",to);
+                                        intent.putExtra("zone",snapshot.child(Uid).child("zone").getValue().toString());
+                                        startActivity(intent);
+                                    }
+                                    finish();
+                                } else {
+                                    progressDialog.dismiss();
+
+                                    if (Methods.hasGrantedPermission(Rent.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
+                                                    Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                            "To upload image we need storage permission. Click Continue to give them.",
+                                            "To upload image we need storage permission. You can give them from settings.",
+                                            70, "gallery")){
+                                        fillForm();
+                                }
+                                }
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+
+                            }
+                        });
+
+
                     }
 
 
-                 /*   FileOutputStream out;
-                    String filename = Methods.getFilename(this);
-                    try {
-                        File  compressedImageFile = new Compressor(this).compressToFile(new File(getPath(uri)));
 
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    } */
-                    //   String finalUri= Methods.compressImage(uri,this);
-                    //    Log.d("furi",finalUri);
-                    //   uploadToFirebase(uri);
-                }
-            }
-            break;
-            case 50:{
-                if (resultCode==RESULT_OK){
-                    isActivityResult=true;
-                    // cam data is null
-                }
-
-
-            }
-            break;
-            case 60:{
-                if (resultCode==RESULT_OK)
-                    getCoordinates();
-            }
-            break;
-        }
 
     }
 
+    private void fillForm() {
+        Methods.fillRentForm(Rent.this, zoneSpinner, brand, From, To, noteCheckbox, note, cycleImage);
+        Uri uploadUri = null;
+        SharedPreferences sharedPreferences = Rent.this.getSharedPreferences("rentInfo", MODE_PRIVATE);
+        i = sharedPreferences.getInt("spinnerPosition", 0);
+        try {
+            uploadUri = Uri.parse(sharedPreferences.getString("uploadUri", null));
+        } catch (NullPointerException e) {
+            Log.d("uploaduri", "no uri found");
+        }
+
+        if (uploadUri != null && !uploadUri.equals(Uri.EMPTY) && checkURIResource(Rent.this, uploadUri)) {
+            contentUri = uploadUri;
+        }
+    }
 
 
     private void getCoordinates() {
         GPSHelper gpsHelper = new GPSHelper(this);
         if (gpsHelper.canGetLocation()) {
-            gpsHelper.getLocation();
+          //  gpsHelper.getLocation();
             if (gpsHelper.getLatitude()!=0) {
-                gpsCheckbox.setChecked(true);
                 Latitude = String.valueOf(gpsHelper.getLatitude());
                 Longitude = String.valueOf(gpsHelper.getLongitude());
             }
@@ -276,7 +314,7 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
         }
     }
 
-    private void uploadToFirebase(Uri uri, String Brand, String Phone, String Note, String from, String to, CompoundButton noteCheckbox) {
+    private void uploadToFirebase(Uri uri, String Brand,  String Note, String from, String to, CompoundButton noteCheckbox) {
 
         AlertDialog progressDialog=Methods.progressDialog(Rent.this,"Adding your cycle to database..");
         progressDialog.setCanceledOnTouchOutside(false);
@@ -287,15 +325,16 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
                 .putFile(uri).addOnSuccessListener(taskSnapshot ->
                 Objects.requireNonNull(Objects.requireNonNull(taskSnapshot.getMetadata()).getReference()).getDownloadUrl()
                 .addOnSuccessListener(uri1 -> {
-                    DatabaseReference databaseReference=FirebaseDatabase.getInstance().getReference().child("users").child(Uid).child("phone");
-                    databaseReference.setValue(Phone);
+
+                    databaseReference.child("rented").child(Uid).child("To").setValue("none");
+                    databaseReference.child("rented").child(Uid).child("zone").setValue(zone);
                     String Available = from + "-" + to;
-                    mDatabaseReference = FirebaseDatabase.getInstance().getReference("cycles").child(zone)
+                  DatabaseReference  mDatabaseReference =databaseReference.child("cycles").child(zone)
                             .child(Uid);
                     mDatabaseReference.child("cycleURL").setValue(uri1.toString());
                     mDatabaseReference.child("brand").setValue(Brand);
-                    mDatabaseReference.child("available").setValue(Available);
                     mDatabaseReference.child("phone").setValue(Phone);
+                    mDatabaseReference.child("available").setValue(Available);
                     if (noteCheckbox.isChecked())
                         mDatabaseReference.child("note").setValue(Note);
                     if (gpsCheckbox.isChecked()) {
@@ -304,10 +343,10 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
                     }
                  //   Methods.saveAvailability(Rent.this, true);
 
-                    Toast.makeText(Rent.this, "Your submission has been received", Toast.LENGTH_SHORT).show();
+
                     progressDialog.dismiss();
-                    //startActivity(new Intent(Rent.this, StatusActivity.class));
-                  //  finish();
+                    startActivity(new Intent(Rent.this, StatusActivity.class));
+                   finish();
                 })
                 .addOnFailureListener(e -> {
                     progressDialog.dismiss();
@@ -316,19 +355,65 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        switch (requestCode) {
+            case 40:{
+                if (resultCode==RESULT_OK && data!=null){
+                    Uri uri=data.getData();
+                    isActivityResult=true;
+                    File compressedFile=Methods.getCompressedFile(this,uri);
+                    contentUri=Methods.getImageContentUri(this,compressedFile.getAbsolutePath());
+                    cycleImage.setImageURI(contentUri);
+
+                }
+            }
+            break;
+            case 50:{
+                if (resultCode==RESULT_OK){
+                    isActivityResult=true;
+                    // cam data is null
+                    Uri uri=Methods.getCameraUri(this);
+                    Log.d("uri",uri.toString());
+                    File compressedFile=Methods.getCompressedFile(this,uri);
+                    contentUri=Methods.getImageContentUri(this,compressedFile.getAbsolutePath());
+                    cycleImage.setImageURI(contentUri);
+
+
+                }
+
+
+            }
+            break;
+            case 60:{
+                if (resultCode==RESULT_OK) {
+                    getCoordinates();
+                    gpsCheckbox.setChecked(true);
+                }
+                else gpsCheckbox.setChecked(false);
+            }
+            break;
+        }
+
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode){
             case 10:{
                 if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED)
                     ActivityHelpers.launchGalleryIntent(this);
             }
             break;
             case 20:{
 
                 if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[2] == PackageManager.PERMISSION_GRANTED)
                     ActivityHelpers.launchCameraIntent(this,this);
             }
             break;
@@ -344,30 +429,19 @@ public class Rent extends AppCompatActivity implements AdapterView.OnItemSelecte
                 }
             }
             break;
+            case 70:{
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                        && grantResults[1] == PackageManager.PERMISSION_GRANTED){
+                    fillForm();
+
+                }
+            }
+            break;
         }
     }
-    private String getPath(Uri uri) {
-
-        String[] projection = { MediaStore.Audio.Media.DATA };
-        Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
-        int column_index = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA);
-        cursor.moveToFirst();
-        return cursor.getString(column_index);
-
-    }
 
 
-
-    @Override
-    public void onItemSelected(AdapterView<?> adapterView, View view, int position, long l) {
-        zone=Methods.selectedZone(position);
-        i=position;
-    }
-    public void onNothingSelected(AdapterView<?> parent) {
-        // Another interface callback
-        zone="Tilak";
-        i=0;
-    }
 }
 
 

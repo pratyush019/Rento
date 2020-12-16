@@ -5,13 +5,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.ImageView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.CircleCrop;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -24,6 +29,8 @@ import com.mikepenz.materialdrawer.DrawerBuilder;
 import com.mikepenz.materialdrawer.model.DividerDrawerItem;
 import com.mikepenz.materialdrawer.model.PrimaryDrawerItem;
 import com.mikepenz.materialdrawer.model.ProfileDrawerItem;
+import com.mikepenz.materialdrawer.util.AbstractDrawerImageLoader;
+import com.mikepenz.materialdrawer.util.DrawerImageLoader;
 import com.tlabs.rento.Activities.HomeActivity;
 import com.tlabs.rento.Activities.MainActivity;
 import com.tlabs.rento.Activities.Messaging;
@@ -60,27 +67,32 @@ public class Drawer{
                     imageUri[0] = Uri.parse(details[2]);
                 }
                 else {
-            // imageUri[0]=Uri.parse(String.valueOf(R.drawable.ic_baseline_account_circle_24));
+                    imageUri[0]=Methods.getUriToDrawable(context,R.drawable.ic_baseline_account_circle_24);
+
                 }
 
 
 
 
-    /*    DrawerImageLoader.init(new AbstractDrawerImageLoader() {
+
+
+                DrawerImageLoader.init(new AbstractDrawerImageLoader() {
                     @Override
                     public void set(ImageView imageView, Uri uri, Drawable placeholder) {
                         if (!Methods.isActivityDestroyed(activity))
                             Glide.with(context)
-                                    .load(imageUri)
-                                    .placeholder(placeholder)
+                                    .load(imageUri[0])
+                                    .placeholder(R.drawable.ic_baseline_account_circle_24)
+                                    .transform(new CircleCrop())
                                     .into(imageView);
+                        Log.d("drawUri************",imageUri[0].toString());
                     }
 
                     @Override
                     public void cancel(ImageView imageView) {
                         // Glide.with(context).clear(imageView);
                     }
-                }); */
+                });
 
                 headerResult[0] = new AccountHeaderBuilder()
                         .withActivity(activity)

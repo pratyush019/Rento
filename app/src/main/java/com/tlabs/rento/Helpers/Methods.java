@@ -3,6 +3,8 @@ package com.tlabs.rento.Helpers;
 import android.Manifest;
 import android.app.Activity;
 import android.app.TimePickerDialog;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentSender;
@@ -10,12 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.media.ExifInterface;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -23,7 +20,6 @@ import android.os.Build;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -36,6 +32,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.TimePicker;
 
+import androidx.annotation.AnyRes;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
@@ -52,15 +49,16 @@ import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.tlabs.rento.BuildConfig;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
 import java.util.Objects;
 
+import id.zelory.compressor.Compressor;
+
 import static android.content.Context.MODE_PRIVATE;
+import static androidx.core.app.ActivityCompat.requestPermissions;
 import static androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale;
 
 public  final  class Methods {
@@ -169,32 +167,28 @@ public  final  class Methods {
         builder.setAlwaysShow(true);
 
         PendingResult<LocationSettingsResult> result = LocationServices.SettingsApi.checkLocationSettings(googleApiClient, builder.build());
-        result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
-            @Override
-            public void onResult(@NonNull LocationSettingsResult result) {
-                final Status status = result.getStatus();
-                switch (status.getStatusCode()) {
-                    case LocationSettingsStatusCodes.SUCCESS:
-                        Log.i("Location Change Status", "All location settings are satisfied.");
-                        break;
-                    case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
-                        Log.i("Location Change Status", "Location settings are not satisfied. Show the user a dialog to upgrade location settings ");
+        result.setResultCallback(result1 -> {
+            final Status status = result1.getStatus();
+            switch (status.getStatusCode()) {
+                case LocationSettingsStatusCodes.SUCCESS:
+                    Log.i("Location Change Status", "All location settings are satisfied.");
+                    break;
+                case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+                    Log.i("Location Change Status", "Location settings are not satisfied. Show the user a dialog to upgrade location settings ");
 
-                        try {
-                            // Show the dialog by calling startResolutionForResult(), and check the result
-                            // in onActivityResult().
-                            status.startResolutionForResult(activity, 60);
+                    try {
+                        // Show the dialog by calling startResolutionForResult(), and check the result
+                        // in onActivityResult().
+                        status.startResolutionForResult(activity, 60);
 
-                        } catch (IntentSender.SendIntentException e) {
-                            Log.i("Location Change Status", "Pending Intent unable to execute request.");
-                        }
-                        break;
-                    case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
-                        Log.i("Location Change Status", "Location settings are inadequate, and cannot be fixed here. Dialog not created.");
-                        break;
-                }
+                    } catch (IntentSender.SendIntentException e) {
+                        Log.i("Location Change Status", "Pending Intent unable to execute request.");
+                    }
+                    break;
+                case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
+                    Log.i("Location Change Status", "Location settings are inadequate, and cannot be fixed here. Dialog not created.");
+                    break;
             }
-
         });
     }
 
@@ -216,7 +210,7 @@ public  final  class Methods {
         return sharedPreferences.getBoolean("isAvailable", false);
     }
 
-    public static void saveRentInfo(Context context, int spinnerPosition, String brand, String From, String To, String phone,
+    public static void saveRentInfo(Context context, int spinnerPosition, String brand, String From, String To,
                                     boolean isNoteChecked, String note, String uploadUri) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("rentInfo", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -224,7 +218,6 @@ public  final  class Methods {
         editor.putString("brand", brand);
         editor.putString("From", From);
         editor.putString("To", To);
-        editor.putString("phone", phone);
         editor.putBoolean("isNoteChecked", isNoteChecked);
         if (isNoteChecked)
             editor.putString("note", note);
@@ -232,14 +225,13 @@ public  final  class Methods {
         editor.apply();
     }
 
-    public static void fillRentForm(Context context, Spinner spinner, EditText brand, EditText From, EditText To, EditText phone, CheckBox noteCheckbox,
+    public static void fillRentForm(Context context, Spinner spinner, EditText brand, EditText From, EditText To, CheckBox noteCheckbox,
                                     EditText note, ImageView imageView) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("rentInfo", MODE_PRIVATE);
         spinner.setSelection(sharedPreferences.getInt("spinnerPosition", 0));
         brand.setText(sharedPreferences.getString("brand", null));
         From.setText(sharedPreferences.getString("From", null));
         To.setText(sharedPreferences.getString("To", null));
-        phone.setText(sharedPreferences.getString("phone", null));
         if (sharedPreferences.getBoolean("isNoteChecked", false)) {
             noteCheckbox.setChecked(true);
             note.setText(sharedPreferences.getString("note", null));
@@ -251,9 +243,8 @@ public  final  class Methods {
             Log.d("uploaduri", "no uri found");
         }
 
-        if (uploadUri != null && !uploadUri.equals(Uri.EMPTY)) {
-            imageView.setImageURI(uploadUri);
-            imageView.setVisibility(View.VISIBLE);
+        if (uploadUri != null && !uploadUri.equals(Uri.EMPTY) && checkURIResource(context,uploadUri)) {
+           imageView.setImageURI(uploadUri);
         }
     }
 
@@ -263,6 +254,18 @@ public  final  class Methods {
         editor.putBoolean(uid, hasBooked);
         editor.apply();
     }
+
+    public static void saveUriInfo(Context context, String uriString) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("uriInfo", MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString("uri", uriString);
+        editor.apply();
+    }
+    public static Uri getCameraUri(Context context) {
+        SharedPreferences sharedPreferences = context.getSharedPreferences("uriInfo", MODE_PRIVATE);
+        return Uri.parse(sharedPreferences.getString("uri",null));
+    }
+
 
     public static boolean retrieveBookInfo(Context context, String uid) {
         SharedPreferences sharedPreferences = context.getSharedPreferences("bookingInfo", MODE_PRIVATE);
@@ -366,41 +369,54 @@ public  final  class Methods {
         activity.startActivity(Intent.createChooser(mailIntent, "Send mail..."));
     }
 
-    public static boolean hasGrantedPermission(final Context context, final String permissionString,
+    public static boolean hasGrantedPermission(final Context context, final String[] permissionString,
                                                final String permissionRationaleMessage, String launchSettingMessage,
-                                               final int requestCode) {
-        boolean granted = false;
+                                               final int requestCode,final String preferenceString) {
+        int permissionLength=permissionString.length;
+        Boolean[] grantResults=new Boolean[permissionLength];
+        Boolean[] shouldShowPermissionRationale=new Boolean[permissionLength];
+        boolean hasGranted=false,rationale=false;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (hasAsked(context, permissionString)){
-                if (ActivityCompat.checkSelfPermission(context, permissionString) == PackageManager.PERMISSION_GRANTED) {
-                    granted = true;
-                } else if (shouldShowRequestPermissionRationale((Activity) context, permissionString)) {
-                    AlertDialog.Builder builder = builder(context, "Grant Permission..", permissionRationaleMessage);
-                    builder.setCancelable(true);
-                    builder.setPositiveButton("CONTINUE", (dialog, which) ->
-                            ActivityCompat.requestPermissions((Activity) context,
-                                    new String[]{permissionString}, requestCode)).
-                            setNegativeButton("NOT NOW", (dialog, which) -> dialog.cancel()).show();
-                } else {
-                    AlertDialog.Builder builder = builder(context, "Launch Settings?", launchSettingMessage);
-                    builder.setCancelable(true);
-                    builder.setPositiveButton("Yes", (dialog, which) ->
-                            context.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.parse("package:" + BuildConfig.APPLICATION_ID))))
-                            .setNegativeButton("No", (dialog, which) -> dialog.cancel()).show();
+            if (hasAsked(context, preferenceString)){
 
+                for (int i=0;i<permissionLength;i++) {
+                    grantResults[i] = ActivityCompat.checkSelfPermission(
+                            context, permissionString[i]) == PackageManager.PERMISSION_GRANTED;
+                    if (!grantResults[i]){
+                        hasGranted=false;
+                        break;
+                    }
+                    else {
+                        hasGranted=true;
+                    }
                 }
-        }
-            else {
-                ActivityCompat.requestPermissions((Activity)context,new String[]{permissionString},requestCode);
-                savePermissions(context,permissionString);
+                for (int i=0;i<permissionLength;i++){
+                    shouldShowPermissionRationale[i]=shouldShowRequestPermissionRationale((Activity)context,permissionString[i]);
+                    if (shouldShowPermissionRationale[i]){
+                        rationale=true;
+                        break;
+                    }
+                }
+                if (hasGranted)
+                    return true;
+                else if(rationale)
+                     showPermissionRationaleDialog(context,permissionRationaleMessage,permissionString,requestCode);
+                else showLaunchSettingsDialog(context, launchSettingMessage);
+
+
+                    } else {
+                requestPermissions((Activity)context,permissionString,requestCode);
+                savePermissions(context,preferenceString);
             }
 
-        } else granted = true;
-        return granted;
+
+                }
+
+         else hasGranted = true;
+        return hasGranted;
     }
 
-    public static boolean hasGrantedLocationPermission(Context context){
+  /*  public static boolean hasGrantedLocationPermission(Context context){
         boolean granted=false;
         if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){
             if(Methods.hasAsked(context,"location")) {
@@ -441,137 +457,10 @@ public  final  class Methods {
 
         return granted;
 
-    }
+    } */
 
 
-    public static String compressImage(Uri imageUri,Context context) {
-
-        String filePath = getRealPathFromURI(imageUri,context);
-        Bitmap scaledBitmap = null;
-
-        BitmapFactory.Options options = new BitmapFactory.Options();
-
-//      by setting this field as true, the actual bitmap pixels are not loaded in the memory. Just the bounds are loaded. If
-//      you try the use the bitmap here, you will get null.
-        options.inJustDecodeBounds = true;
-        Bitmap bmp = BitmapFactory.decodeFile(filePath, options);
-
-        int actualHeight = options.outHeight;
-        int actualWidth = options.outWidth;
-
-//      max Height and width values of the compressed image is taken as 816x612
-
-        float maxHeight = 816.0f;
-        float maxWidth = 612.0f;
-        float imgRatio = actualWidth / actualHeight;
-        float maxRatio = maxWidth / maxHeight;
-
-//      width and height values are set maintaining the aspect ratio of the image
-
-        if (actualHeight > maxHeight || actualWidth > maxWidth) {
-            if (imgRatio < maxRatio) {
-                imgRatio = maxHeight / actualHeight;
-                actualWidth = (int) (imgRatio * actualWidth);
-                actualHeight = (int) maxHeight;
-            } else if (imgRatio > maxRatio) {
-                imgRatio = maxWidth / actualWidth;
-                actualHeight = (int) (imgRatio * actualHeight);
-                actualWidth = (int) maxWidth;
-            } else {
-                actualHeight = (int) maxHeight;
-                actualWidth = (int) maxWidth;
-
-            }
-        }
-
-//      setting inSampleSize value allows to load a scaled down version of the original image
-
-        options.inSampleSize = calculateInSampleSize(options, actualWidth, actualHeight);
-
-//      inJustDecodeBounds set to false to load the actual bitmap
-        options.inJustDecodeBounds = false;
-
-//      this options allow android to claim the bitmap memory if it runs low on memory
-        options.inPurgeable = true;
-        options.inInputShareable = true;
-        options.inTempStorage = new byte[16 * 1024];
-
-        try {
-//          load the bitmap from its path
-            bmp = BitmapFactory.decodeFile(filePath, options);
-        } catch (OutOfMemoryError exception) {
-            exception.printStackTrace();
-
-        }
-        try {
-            scaledBitmap = Bitmap.createBitmap(actualWidth, actualHeight, Bitmap.Config.ARGB_8888);
-        } catch (OutOfMemoryError exception) {
-            exception.printStackTrace();
-        }
-
-        float ratioX = actualWidth / (float) options.outWidth;
-        float ratioY = actualHeight / (float) options.outHeight;
-        float middleX = actualWidth / 2.0f;
-        float middleY = actualHeight / 2.0f;
-
-        Matrix scaleMatrix = new Matrix();
-        scaleMatrix.setScale(ratioX, ratioY, middleX, middleY);
-
-        Canvas canvas = new Canvas(scaledBitmap);
-        canvas.setMatrix(scaleMatrix);
-        canvas.drawBitmap(bmp, middleX - bmp.getWidth() / 2, middleY - bmp.getHeight() / 2, new Paint(Paint.FILTER_BITMAP_FLAG));
-
-//      check the rotation of the image and display it properly
-        ExifInterface exif;
-        try {
-            exif = new ExifInterface(filePath);
-
-            int orientation = exif.getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION, 0);
-            Log.d("EXIF", "Exif: " + orientation);
-            Matrix matrix = new Matrix();
-            if (orientation == 6) {
-                matrix.postRotate(90);
-                Log.d("EXIF", "Exif: " + orientation);
-            } else if (orientation == 3) {
-                matrix.postRotate(180);
-                Log.d("EXIF", "Exif: " + orientation);
-            } else if (orientation == 8) {
-                matrix.postRotate(270);
-                Log.d("EXIF", "Exif: " + orientation);
-            }
-            scaledBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0,
-                    scaledBitmap.getWidth(), scaledBitmap.getHeight(), matrix,
-                    true);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        FileOutputStream out;
-        String filename = getFilename(context);
-        try {
-            out = new FileOutputStream(filename);
-
-//          write the compressed bitmap at the destination specified by filename.
-            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out);
-
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-
-        return filename;
-
-    }
-
-    public static String getFilename(Context context) {
-        File  folder = new File(context.getExternalCacheDir(),"images");
-        if (!folder.exists())
-            folder.mkdirs();
-        String uriString = folder.getAbsolutePath() + "/" + System.currentTimeMillis() + ".jpg";
-        return uriString;
-    }
-
-    private static String getRealPathFromURI(Uri contentUri, Context context) {
+    public static String getRealPathFromURI(Uri contentUri, Context context) {
         Cursor cursor = context.getContentResolver().query(contentUri, null, null, null, null);
         if (cursor == null) {
             return contentUri.getPath();
@@ -579,22 +468,6 @@ public  final  class Methods {
             cursor.moveToFirst();
             int index = cursor.getColumnIndex(MediaStore.Images.ImageColumns.DATA);
             return cursor.getString(index); }
-    }
-
-    public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
-        final int height = options.outHeight;
-        final int width = options.outWidth;
-        int inSampleSize = 1;
-        if (height > reqHeight || width > reqWidth) {
-            final int heightRatio = Math.round((float) height/ (float) reqHeight);
-            final int widthRatio = Math.round((float) width / (float) reqWidth);
-            inSampleSize = Math.min(heightRatio, widthRatio);
-        }
-        final float totalPixels = width * height;
-        final float totalReqPixelsCap = reqWidth * reqHeight * 2;
-        while (totalPixels / (inSampleSize * inSampleSize) > totalReqPixelsCap) {
-            inSampleSize++;
-        } return inSampleSize;
     }
 
     public static void savePermissions(Context context,String permission){
@@ -608,7 +481,104 @@ public  final  class Methods {
         return sharedPreferences.getBoolean(permission, false);
     }
 
+    // returns saved file after compressing image, pass only content uri, else may not work
 
+    public static File getCompressedFile(Context context, Uri uri){
+        try {
+           return new Compressor(context)
+                    //.setMaxWidth(640)
+                    // .setMaxHeight(480)
+                    // .setQuality(75)
+                    .setCompressFormat(Bitmap.CompressFormat.JPEG)
+                    .setDestinationDirectoryPath(new File(context.getExternalCacheDir(),"images").getAbsolutePath())
+                    .compressToFile(getFile(uri,context))
+                   ;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+
+    }
+    // returns content uri, pass absolute file path
+
+    public static Uri getImageContentUri(Context context, String absPath) {
+        Cursor cursor = context.getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                , new String[] { MediaStore.Images.Media._ID }
+                , MediaStore.Images.Media.DATA + "=? "
+                , new String[] { absPath }, null);
+
+        if (cursor != null && cursor.moveToFirst()) {
+            int id = cursor.getInt(cursor.getColumnIndex(MediaStore.MediaColumns._ID));
+            return Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI , Integer.toString(id));
+
+        } else if (!absPath.isEmpty()) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DATA, absPath);
+            return context.getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        } else {
+            return null;
+        }
+    }
+
+
+    private static File getFile(Uri uri, Context context) {
+
+          /*  String[] projection = { MediaStore.Audio.Media.DATA };
+            Cursor cursor = context.getContentResolver().query(uri, projection, null, null, null);
+            int column_index = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA);
+            cursor.moveToFirst();
+            return cursor.getString(column_index); */
+        String filePath;
+        try {
+            if (uri != null && "content".equals(uri.getScheme())) {
+                Cursor cursor = context.getContentResolver().query(uri,
+                        new String[]{android.provider.MediaStore.Images.ImageColumns.DATA}, null, null, null);
+                cursor.moveToFirst();
+                filePath = cursor.getString(0);
+                cursor.close();
+            } else {
+                filePath = uri.getPath();
+            }
+            return new File(filePath);
+        } catch (Exception e){
+            return null;
+        }
+
+    }
+    public static boolean checkURIResource(Context context, Uri uri) {
+        Cursor cursor = context.getContentResolver().query(uri, null, null, null, null);
+        boolean doesExist= (cursor != null && cursor.moveToFirst());
+        if (cursor != null) {
+            cursor.close();
+        }
+        return doesExist;
+    }
+    public static  Uri getUriToDrawable(@NonNull Context context,
+                                             @AnyRes int drawableId) {
+        Uri uri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE +
+                "://" + context.getResources().getResourcePackageName(drawableId)
+                + '/' + context.getResources().getResourceTypeName(drawableId)
+                + '/' + context.getResources().getResourceEntryName(drawableId));
+        return uri;
+    }
+    public static void showPermissionRationaleDialog(Context context,String permissionRationaleMessage,String[] permissionString,int requestCode){
+        AlertDialog.Builder builder = builder(context, "Grant Permission..", permissionRationaleMessage);
+        builder.setCancelable(true);
+        builder.setPositiveButton("CONTINUE", (dialog, which) ->
+                ActivityCompat.requestPermissions((Activity) context,
+                        permissionString, requestCode)).
+                setNegativeButton("NOT NOW", (dialog, which) -> dialog.cancel()).show();
+    }
+    public static void showLaunchSettingsDialog(Context context,String launchSettingMessage){
+        AlertDialog.Builder builder = builder(context, "Launch Settings?", launchSettingMessage);
+        builder.setCancelable(true);
+        builder.setPositiveButton("Yes", (dialog, which) ->
+                context.startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + BuildConfig.APPLICATION_ID))))
+                .setNegativeButton("No", (dialog, which) -> dialog.cancel()).show();
+    }
 
 
 }

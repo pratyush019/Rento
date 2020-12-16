@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.util.Log;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.FileProvider;
@@ -23,17 +24,24 @@ public class ActivityHelpers {
                 .setItems(options, (dialog1, which) -> {
                     switch (which) {
                         case 0:
-                                if (Methods.hasGrantedPermission(context, Manifest.permission.CAMERA,
-                                        "To capture image we need to use device Camera. Click Continue to give permission.",
-                                        "To capture image we need use device Camera. You can give Camera permission from settings.",
-                                        20))
+                                if (Methods.hasGrantedPermission(context, new String[]{Manifest.permission.CAMERA,
+                                                Manifest.permission.READ_EXTERNAL_STORAGE,
+                                                Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                        "To capture image we need to use device Camera and to save captured image we" +
+                                                " also need to access your storage." +
+                                                " Click Continue to give permission.",
+                                        "To capture image we need use device Camera and to save captured image we" +
+                                                " also need to access your storage." +
+                                                ". You can give Camera and Storage permission from settings.",
+                                        20,"cameraAndGallery"))
                                     launchCameraIntent(context,(Activity)context);
                             break;
                         case 1:
-                                if (Methods.hasGrantedPermission(context,Manifest.permission.READ_EXTERNAL_STORAGE,
+                                if (Methods.hasGrantedPermission(context,new String[]{Manifest.permission.READ_EXTERNAL_STORAGE,
+                                                Manifest.permission.WRITE_EXTERNAL_STORAGE},
                                         "To upload image we need storage permission. Click Continue to give them.",
                                         "To upload image we need storage permission. You can give them from settings.",
-                                        10))
+                                        10,"gallery"))
                                     launchGalleryIntent((Activity) context);
 
                             break;
@@ -55,10 +63,16 @@ public class ActivityHelpers {
             path.mkdirs();
         File cameraFile = new File(path, System.currentTimeMillis() + ".jpg");
         Uri cameraUri = FileProvider.getUriForFile(context, "com.tlabs.rento.fileprovider", cameraFile);
+        Uri contentUri=Methods.getImageContentUri(context,cameraFile.getAbsolutePath());
 
-        Uri.fromFile(new File(path,System.currentTimeMillis() + ".jpg"));
+
+        Log.d("cfile",cameraFile.toString());
+        Log.d("curi",cameraUri.toString());
+
+      // Uri.fromFile(new File(path,System.currentTimeMillis() + ".jpg"));
         Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraUri);
+        Methods.saveUriInfo(context,contentUri.toString());
         activity.startActivityForResult(cameraIntent, 50);
     }
 
